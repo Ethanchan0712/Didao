@@ -466,6 +466,22 @@ router.post('/driver/accept/:orderId', authDriver, (req, res) => {
   res.json({ order: updated });
 });
 
+// ========== 司機取消當前單（放棄單，釋放可再接） ==========
+router.post('/driver/cancel-current', authDriver, (req, res) => {
+  const order = db.prepare(`SELECT * FROM orders
+    WHERE driver_id = ? AND status IN ('accepted','picked_up')
+    ORDER BY created_at DESC LIMIT 1`).get(req.userId);
+  if (!order) return res.status(400).json({ error: '冇可取消嘅進行中訂單' });
+
+  db.prepare("UPDATE orders SET status = 'cancelled', finished_at = ? WHERE id = ?").run(Date.now(), order.id);
+  const updated = getOrderById(order.id);
+
+  sseHub.publishToOrder(order.id, 'order-cancelled', { order: updated });
+  sseHub.publishToDriverHall('order-cancelled', { orderId: order.id });
+
+  res.json({ ok: true, order: updated });
+});
+
 // ========== 司機拒單 ==========
 router.post('/driver/reject/:orderId', authDriver, (req, res) => {
   // 記錄拒單：呢位司機之後唔會再見到呢張單（同一單唔會無限彈返出嚟）

@@ -256,9 +256,11 @@ const driverSeedStmt = db.prepare(`
 for (const d of seedDrivers) {
   const { c: cnt } = db.prepare('SELECT COUNT(*) as c FROM drivers WHERE username = ?').get(d.username);
   if (cnt === 0) {
-    driverSeedStmt.run(d.id, d.username, '9000' + d.username.slice(-3), bcrypt.hashSync('123456', 10), d.name, d.plate, d.car_model, d.is_vvip, Date.now(), Date.now());
-    console.log(`[DB] 示範司機 seeded: ${d.username} / 123456 (${d.is_vvip ? '皇牌' : '普通'})`);
+    driverSeedStmt.run(d.id, d.username, '9000' + d.username.slice(-3), bcrypt.hashSync('55888712', 10), d.name, d.plate, d.car_model, d.is_vvip, Date.now(), Date.now());
+    console.log(`[DB] 示範司機 seeded: ${d.username} / 55888712 (${d.is_vvip ? '皇牌' : '普通'})`);
   }
+  // 強制更新示範司機密碼（確保任何部署都係 55888712）
+  db.prepare('UPDATE drivers SET password = ? WHERE username = ?').run(bcrypt.hashSync('55888712', 10), d.username);
 }
 
 // ========== 過期皇牌自動降級 ==========
