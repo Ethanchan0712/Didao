@@ -1,0 +1,83 @@
+[
+  {
+    "path": "/"
+  },
+  {
+    "path": "/passenger/login"
+  },
+  {
+    "path": "/passenger"
+  },
+  {
+    "path": "/passenger/waiting"
+  },
+  {
+    "path": "/passenger/riding"
+  },
+  {
+    "path": "/passenger/payment"
+  },
+  {
+    "path": "/passenger/rating"
+  },
+  {
+    "path": "/passenger/history"
+  },
+  {
+    "path": "/passenger/profile"
+  },
+  {
+    "path": "/driver/login"
+  },
+  {
+    "path": "/driver/register"
+  },
+  {
+    "path": "/driver"
+  },
+  {
+    "path": "/driver/riding"
+  },
+  {
+    "path": "/driver/rating"
+  },
+  {
+    "path": "/driver/rating-list"
+  },
+  {
+    "path": "/driver/earnings"
+  },
+  {
+    "path": "/driver/profile"
+  },
+  {
+    "path": "/driver/verify"
+  },
+  {
+    "path": "/driver/wallet"
+  },
+  {
+    "path": "/driver/help"
+  },
+  {
+    "path": "/driver/settings"
+  },
+  {
+    "path": "/driver/verify-status"
+  },
+  {
+    "path": "/admin/login"
+  },
+  {
+    "path": "/admin"
+  },
+  {
+    "path": "/rental"
+  },
+  {
+    "path": "/notifications"
+  },
+  {
+    "path": "/share/:id"
+  }
+]

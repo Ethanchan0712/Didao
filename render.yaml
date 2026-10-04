@@ -1,0 +1,11 @@
+# 「的道」Render Blueprint（可選）——喺 Render 手動建立 Web Service 亦可，唔一定要用呢個檔案
+services:
+  - type: web
+    name: dikdou-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000

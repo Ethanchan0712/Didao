@@ -1,0 +1,26 @@
+{
+  "name": "的道 · 香港的士叫車平台",
+  "short_name": "的道",
+  "description": "的道 DikDou - 香港的士叫車平台，市區/新界/大嶼山/6座位的士",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f3d2e",
+  "theme_color": "#0f3d2e",
+  "orientation": "portrait",
+  "categories": ["travel", "lifestyle", "navigation"],
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "https://aka.doubaocdn.com/s/pKMrCCXYov",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://aka.doubaocdn.com/s/pKMrCCXYov",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
