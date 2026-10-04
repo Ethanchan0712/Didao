@@ -183,6 +183,14 @@ CREATE INDEX IF NOT EXISTS idx_orders_dispatch ON orders(dispatch_phase, status)
       console.warn('[DB] skip vvip_expires_at:', e.message);
     }
   }
+  if (!cols.includes('last_seen')) {
+    try {
+      db.prepare('ALTER TABLE drivers ADD COLUMN last_seen INTEGER').run();
+      console.log('[DB] drivers +last_seen');
+    } catch (e) {
+      console.warn('[DB] skip last_seen:', e.message);
+    }
+  }
 })();
 
 // ========== 水浸警報表 ==========

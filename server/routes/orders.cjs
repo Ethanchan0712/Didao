@@ -572,10 +572,36 @@ router.post('/driver/rate', authDriver, (req, res) => {
 // ========== 司機上線/落線 ==========
 router.post('/driver/online', authDriver, (req, res) => {
   const { online, lat, lng } = req.body;
-  db.prepare('UPDATE drivers SET online = ?, current_lat = ?, current_lng = ? WHERE id = ?').run(
-    online ? 1 : 0, lat || null, lng || null, req.userId
+  const now = Date.now();
+  db.prepare('UPDATE drivers SET online = ?, current_lat = ?, current_lng = ?, last_seen = ? WHERE id = ?').run(
+    online ? 1 : 0, lat || null, lng || null, online ? now : 0, req.userId
   );
-  res.json({ online: !!online });
+  res.json({ online: !!online, lastSeen: online ? now : 0 });
+});
+
+// ========== 附近在線司機（真實數字，畀乘客叫車頁用） ==========
+router.get('/driver/nearby', (req, res) => {
+  const { lat, lng, radius = 12 } = req.query;
+  const rows = db.prepare(
+    "SELECT id, name, plate, current_lat, current_lng FROM drivers WHERE online = 1 AND status = 'approved' AND current_lat IS NOT NULL AND current_lng IS NOT NULL"
+  ).all();
+  let list = rows;
+  if (lat && lng) {
+    const pLat = Number(lat);
+    const pLng = Number(lng);
+    const R = 6371;
+    const maxD = Number(radius);
+    const distOf = (r) => {
+      const dLat = (r.current_lat - pLat) * Math.PI / 180;
+      const dLng = (r.current_lng - pLng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(pLat * Math.PI / 180) * Math.cos(r.current_lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    list = rows
+      .map((r) => ({ ...r, distance: Math.round(distOf(r) * 10) / 10 }))
+      .filter((r) => r.distance <= maxD);
+  }
+  res.json({ count: list.length, drivers: list });
 });
 
 // ========== 更新位置 ==========
