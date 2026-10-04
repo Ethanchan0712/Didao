@@ -9,3 +9,10 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      # 持久磁碟：把資料庫寫入掛載路徑 /var/data，避免每次 deploy 重置
+      - key: DB_PATH
+        value: /var/data/taxi.db
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
