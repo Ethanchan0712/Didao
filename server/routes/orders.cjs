@@ -370,6 +370,10 @@ router.get('/driver/hall', authDriver, (req, res) => {
   // 刷新派單階段（保證數據最新）
   refreshDispatchPhases();
 
+  // 24 小時後自動刪除過期單（淨係清 searching 未接嘅單；已接/進行中單唔會刪）
+  const expireBefore = Date.now() - 24 * 60 * 60 * 1000;
+  db.prepare(`DELETE FROM orders WHERE status = 'searching' AND created_at < ?`).run(expireBefore);
+
   const driverLat = driver.current_lat || 22.3;
   const driverLng = driver.current_lng || 114.17;
   const isVvip = !!driver.is_vvip;
@@ -383,10 +387,10 @@ router.get('/driver/hall', authDriver, (req, res) => {
     FROM orders o
     LEFT JOIN passengers p ON o.passenger_id = p.id
     LEFT JOIN drivers d ON o.driver_id = d.id
-    WHERE o.status = 'searching'
+    WHERE o.status = 'searching' AND o.created_at > ?
     ORDER BY o.created_at DESC
     LIMIT 20
-  `).all();
+  `).all(expireBefore);
 
   // 按派單階段 + 司機等級過濾
   const now = Date.now();
@@ -490,6 +494,24 @@ router.get('/driver/current', authDriver, (req, res) => {
     LIMIT 1
   `).get(req.userId);
   res.json({ order: orderToJson(row) || null });
+});
+
+// ========== 司機訂單記錄（歷史單，可以睇返上一張＋打返俾乘客） ==========
+router.get('/driver/history', authDriver, (req, res) => {
+  const rows = db.prepare(`
+    SELECT o.*,
+           p.name as passenger_name, p.rating as passenger_rating,
+           d.name as driver_name, d.plate as driver_plate,
+           d.car_model as driver_car_model, d.rating as driver_rating,
+           d.is_vvip as driver_is_vvip
+    FROM orders o
+    LEFT JOIN passengers p ON o.passenger_id = p.id
+    LEFT JOIN drivers d ON o.driver_id = d.id
+    WHERE o.driver_id = ?
+    ORDER BY o.created_at DESC
+    LIMIT 60
+  `).all(req.userId);
+  res.json({ orders: rows.map(orderToJson) });
 });
 
 // ========== 司機到達上車點 ==========
