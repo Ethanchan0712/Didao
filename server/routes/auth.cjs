@@ -136,15 +136,16 @@ router.post('/driver/register', (req, res) => {
     return res.status(400).json({ error: '帳號或電話已經註冊咗' });
   }
 
-  // 介紹人（會員號碼＝電話號碼）：可選填，但填咗一定要係已開通嘅司機會員
+  // 介紹人（會員號碼＝電話號碼）：可選填，填咗一定要係已註冊嘅司機會員
+  //（唔強制要已批核——頭一個司機仲係待批核都要做得介紹人，否則會卡住後續申請）
   let referrerPhoneNorm = null;
   if (referrerPhone && String(referrerPhone).trim()) {
     referrerPhoneNorm = String(referrerPhone).trim();
     const referrer = db.prepare(
-      "SELECT id, name, status FROM drivers WHERE phone = ? AND status = 'approved'"
+      'SELECT id, name, status FROM drivers WHERE phone = ?'
     ).get(referrerPhoneNorm);
     if (!referrer) {
-      return res.status(400).json({ error: '介紹人號碼唔正確（要填已開通嘅司機電話號碼）' });
+      return res.status(400).json({ error: '介紹人號碼唔正確（搵唔到呢個會員）' });
     }
   }
 
