@@ -57,7 +57,7 @@ function authAdmin(req, res, next) {
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role !== 'admin') throw new Error('wrong role');
+    if (decoded.role !== 'admin') return res.status(403).json({ error: '無權限訪問（此功能需要管理員帳號）' });
     const user = db.prepare('SELECT id, username, role FROM admins WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: '帳號不存在' });
     req.user = user;
@@ -76,7 +76,7 @@ function authOperator(req, res, next) {
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role !== 'admin' && decoded.role !== 'operator') throw new Error('wrong role');
+    if (decoded.role !== 'admin' && decoded.role !== 'operator') return res.status(403).json({ error: '無權限訪問（此功能需要管理員／營運主任帳號）' });
     const user = db.prepare('SELECT id, username, role FROM admins WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: '帳號不存在' });
     req.user = user;
