@@ -58,7 +58,7 @@ function authAdmin(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded.role !== 'admin') throw new Error('wrong role');
-    const user = db.prepare('SELECT id, username FROM admins WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, username, role FROM admins WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: '帳號不存在' });
     req.user = user;
     req.userId = user.id;
@@ -68,4 +68,23 @@ function authAdmin(req, res, next) {
   }
 }
 
-module.exports = { signToken, authPassenger, authDriver, authAdmin, JWT_SECRET };
+// 營運主任（operator）都通過——admin 或 operator，用嚟批核成員
+function authOperator(req, res, next) {
+  const token = getToken(req);
+  if (!token) {
+    return res.status(401).json({ error: '未登入' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'admin' && decoded.role !== 'operator') throw new Error('wrong role');
+    const user = db.prepare('SELECT id, username, role FROM admins WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(401).json({ error: '帳號不存在' });
+    req.user = user;
+    req.userId = user.id;
+    next();
+  } catch {
+    return res.status(401).json({ error: '登入已過期' });
+  }
+}
+
+module.exports = { signToken, authPassenger, authDriver, authAdmin, authOperator, JWT_SECRET };

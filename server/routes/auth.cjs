@@ -117,7 +117,7 @@ router.get('/passenger/me', authPassenger, (req, res) => {
 
 // ========== 司機註冊 ==========
 router.post('/driver/register', (req, res) => {
-  const { username, phone, password, name, plate, carModel, driverLicense, idFront4 } = req.body;
+  const { username, phone, password, name, plate, carModel, driverLicense, idFront4, referrerPhone } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: '請輸入帳號同密碼' });
   }
@@ -136,17 +136,30 @@ router.post('/driver/register', (req, res) => {
     return res.status(400).json({ error: '帳號或電話已經註冊咗' });
   }
 
+  // 介紹人（會員號碼＝電話號碼）：可選填，但填咗一定要係已開通嘅司機會員
+  let referrerPhoneNorm = null;
+  if (referrerPhone && String(referrerPhone).trim()) {
+    referrerPhoneNorm = String(referrerPhone).trim();
+    const referrer = db.prepare(
+      "SELECT id, name, status FROM drivers WHERE phone = ? AND status = 'approved'"
+    ).get(referrerPhoneNorm);
+    if (!referrer) {
+      return res.status(400).json({ error: '介紹人號碼唔正確（要填已開通嘅司機電話號碼）' });
+    }
+  }
+
   const id = genId('d');
   const hash = bcrypt.hashSync(password, 10);
   const now = Date.now();
 
-  db.prepare(`INSERT INTO drivers (id, username, phone, password, name, plate, car_model, driver_license, id_front4, status, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(
+  db.prepare(`INSERT INTO drivers (id, username, phone, password, name, plate, car_model, driver_license, id_front4, referrer_phone, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(
     id, username, phone || '', hash, name || username,
-    plate || '', carModel || '', driverLicense || '', String(idFront4).toUpperCase(), now
+    plate || '', carModel || '', driverLicense || '', String(idFront4).toUpperCase(),
+    referrerPhoneNorm, now
   );
 
-  const user = db.prepare(`SELECT id, username, phone, name, plate, car_model, driver_license, id_front4, status, rating, rating_count
+  const user = db.prepare(`SELECT id, username, phone, name, plate, car_model, driver_license, id_front4, referrer_phone, status, rating, rating_count
                            FROM drivers WHERE id = ?`).get(id);
   const token = signToken({ id, role: 'driver' });
 
@@ -192,6 +205,8 @@ router.post('/driver/login', (req, res) => {
     current_lng: row.current_lng,
     is_vvip: !!row.is_vvip,
     vvip_expires_at: row.vvip_expires_at || null,
+    is_vip: !!row.is_vip,
+    vip_expires_at: row.vip_expires_at || null,
     vvip_applied: !!row.vvip_applied,
     vvip_requested_at: row.vvip_requested_at,
   };
@@ -272,8 +287,9 @@ router.post('/admin/login', (req, res) => {
     return res.status(401).json({ error: '帳號或密碼錯誤' });
   }
 
-  const user = { id: row.id, username: row.username };
-  const token = signToken({ id: row.id, role: 'admin' });
+  const role = row.role || 'admin';
+  const user = { id: row.id, username: row.username, role };
+  const token = signToken({ id: row.id, role });
 
   res.json({ user, token });
 });

@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS drivers (
   vvip_expires_at INTEGER,             -- 皇牌到期時間戳（NULL=永久）
   vvip_applied INTEGER DEFAULT 0,     -- 0=未申請, 1=已申請待審批
   vvip_requested_at INTEGER,          -- 申請時間
+  is_vip INTEGER DEFAULT 0,           -- 0=普通, 1=VIP會員
+  vip_expires_at INTEGER,             -- VIP 到期時間戳（NULL=永久）
+  referrer_phone TEXT,                -- 介紹人（已開通司機）嘅電話號碼（會員號碼）
   created_at INTEGER NOT NULL,
   approved_at INTEGER
 );
@@ -191,6 +194,30 @@ CREATE INDEX IF NOT EXISTS idx_orders_dispatch ON orders(dispatch_phase, status)
       console.warn('[DB] skip last_seen:', e.message);
     }
   }
+  if (!cols.includes('referrer_phone')) {
+    try {
+      db.prepare('ALTER TABLE drivers ADD COLUMN referrer_phone TEXT').run();
+      console.log('[DB] drivers +referrer_phone');
+    } catch (e) {
+      console.warn('[DB] skip referrer_phone:', e.message);
+    }
+  }
+  if (!cols.includes('is_vip')) {
+    try {
+      db.prepare('ALTER TABLE drivers ADD COLUMN is_vip INTEGER DEFAULT 0').run();
+      console.log('[DB] drivers +is_vip');
+    } catch (e) {
+      console.warn('[DB] skip is_vip:', e.message);
+    }
+  }
+  if (!cols.includes('vip_expires_at')) {
+    try {
+      db.prepare('ALTER TABLE drivers ADD COLUMN vip_expires_at INTEGER').run();
+      console.log('[DB] drivers +vip_expires_at');
+    } catch (e) {
+      console.warn('[DB] skip vip_expires_at:', e.message);
+    }
+  }
 })();
 
 // ========== 水浸警報表 ==========
@@ -233,15 +260,36 @@ CREATE INDEX IF NOT EXISTS idx_rental_created ON rental_posts(created_at);
 `);
 console.log('[DB] rental_posts table ready');
 
-// ========== Seed admin ==========
+// ========== Seed admin + 營運主任 ==========
+(function migrateAdminRole() {
+  const cols = db.prepare('PRAGMA table_info(admins)').all().map(c => c.name);
+  if (!cols.includes('role')) {
+    try {
+      db.prepare("ALTER TABLE admins ADD COLUMN role TEXT DEFAULT 'admin'").run();
+      console.log('[DB] admins +role');
+    } catch (e) {
+      console.warn('[DB] skip admins.role:', e.message);
+    }
+  }
+})();
 const adminCheck = db.prepare('SELECT COUNT(*) as c FROM admins WHERE username = ?');
 const { c: adminCount } = adminCheck.get('admin');
 if (adminCount === 0) {
   const hash = bcrypt.hashSync('lovevivi815', 10);
-  db.prepare('INSERT INTO admins (id, username, password, created_at) VALUES (?, ?, ?, ?)').run(
-    'admin_001', 'admin', hash, Date.now()
+  db.prepare('INSERT INTO admins (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    'admin_001', 'admin', hash, 'admin', Date.now()
   );
   console.log('[DB] Admin seeded: admin / lovevivi815');
+}
+// 營運主任（operator）——淨係批核，唔可以睇訂單/收入/刪人/開皇牌
+const opCheck = db.prepare('SELECT COUNT(*) as c FROM admins WHERE username = ? OR username = ?');
+const { c: opCount } = opCheck.get('主任', 'operator1');
+if (opCount === 0) {
+  const hash = bcrypt.hashSync('55888712', 10);
+  db.prepare('INSERT INTO admins (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    'op_001', '主任', hash, 'operator', Date.now()
+  );
+  console.log('[DB] 營運主任 seeded: 主任 / 55888712');
 }
 
 // ========== Seed 示範司機（方便測試；皇牌 demo123 / 普通 demo456） ==========
@@ -281,5 +329,23 @@ function expireVvips() {
 expireVvips();
 setInterval(expireVvips, 5 * 60 * 1000).unref?.();
 db.expireVvips = expireVvips;
+
+// VIP 會員到期自動清除（試用 10 日，到期降返普通）
+function expireVips() {
+  try {
+    const now = Date.now();
+    const res = db.prepare(
+      'UPDATE drivers SET is_vip = 0 WHERE is_vip = 1 AND vip_expires_at IS NOT NULL AND vip_expires_at <= ?'
+    ).run(now);
+    if (res.changes > 0) console.log(`[DB] ${res.changes} 個 VIP 到期，自動降返普通`);
+    return res.changes;
+  } catch (e) {
+    console.warn('[DB] expireVips:', e.message);
+    return 0;
+  }
+}
+expireVips();
+setInterval(expireVips, 5 * 60 * 1000).unref?.();
+db.expireVips = expireVips;
 
 module.exports = db;

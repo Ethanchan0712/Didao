@@ -617,6 +617,13 @@ router.post('/driver/online', authDriver, (req, res) => {
   res.json({ online: !!online, lastSeen: online ? now : 0 });
 });
 
+// ========== 司機心跳（維持在線狀態，淨更新 last_seen，唔掂座標） ==========
+router.post('/driver/heartbeat', authDriver, (req, res) => {
+  const now = Date.now();
+  db.prepare('UPDATE drivers SET last_seen = ? WHERE id = ? AND online = 1').run(now, req.userId);
+  res.json({ ok: true, lastSeen: now });
+});
+
 // ========== 附近在線司機（真實數字，畀乘客叫車頁用） ==========
 router.get('/driver/nearby', (req, res) => {
   const { lat, lng, radius = 12 } = req.query;
