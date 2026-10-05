@@ -317,7 +317,9 @@ router.get('/backup', authAdmin, (req, res) => {
 });
 
 // ========== 還原：上傳備份 JSON，重建全部資料（先自動備份現有資料，防損失）==========
-const RESTORE_TABLES = ['passengers', 'drivers', 'admins', 'orders', 'rental_posts', 'chat_messages', 'flood_reports'];
+// 還原只處理業務資料表。admins（管理員帳戶）唔動——由 server 啟動時 seed 管理，
+// 避免還原清空 admin 表之後登入唔到。
+const RESTORE_TABLES = ['passengers', 'drivers', 'orders', 'rental_posts', 'chat_messages', 'flood_reports'];
 
 router.post('/restore', authAdmin, (req, res) => {
   const dump = req.body;
@@ -335,8 +337,8 @@ router.post('/restore', authAdmin, (req, res) => {
     const beforePath = path.join(backupDir, `restore_before_${new Date().toISOString().slice(0, 10)}.json`);
     fs.writeFileSync(beforePath, JSON.stringify(beforeDump, null, 2));
 
-    // 2. 清空（先子表後主表，避免外鍵衝突）
-    const mainTables = ['passengers', 'drivers', 'admins'];
+    // 2. 清空（先子表後主表，避免外鍵衝突；admins 表唔動）
+    const mainTables = ['passengers', 'drivers'];
     const childTables = ['orders', 'rental_posts', 'chat_messages', 'flood_reports'];
     for (const t of [...childTables, ...mainTables]) {
       try { db.prepare(`DELETE FROM ${t}`).run(); } catch { /* 表唔存在就跳過 */ }
