@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const db = require('../db/index.cjs');
 const sseHub = require('../sse/hub.cjs');
 const { authAdmin, authOperator } = require('../middleware/auth.cjs');
@@ -311,6 +313,56 @@ router.get('/backup', authAdmin, (req, res) => {
     res.json(dump);
   } catch (e) {
     res.status(500).json({ error: '備份失敗' });
+  }
+});
+
+// ========== 還原：上傳備份 JSON，重建全部資料（先自動備份現有資料，防損失）==========
+const RESTORE_TABLES = ['passengers', 'drivers', 'admins', 'orders', 'rental_posts', 'chat_messages', 'flood_reports'];
+
+router.post('/restore', authAdmin, (req, res) => {
+  const dump = req.body;
+  if (!dump || !dump.tables || typeof dump.tables !== 'object') {
+    return res.status(400).json({ error: '無效嘅備份檔（缺少 tables）' });
+  }
+  try {
+    // 1. 還原前自動備份現有資料（萬一還原出錯都有得返頭）
+    const beforeDump = { exportedAt: Date.now(), app: 'dikdou', version: 'v1.36', tables: {} };
+    for (const t of RESTORE_TABLES) {
+      try { beforeDump.tables[t] = db.prepare(`SELECT * FROM ${t}`).all(); } catch { beforeDump.tables[t] = []; }
+    }
+    const backupDir = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '..', 'db');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const beforePath = path.join(backupDir, `restore_before_${new Date().toISOString().slice(0, 10)}.json`);
+    fs.writeFileSync(beforePath, JSON.stringify(beforeDump, null, 2));
+
+    // 2. 清空（先子表後主表，避免外鍵衝突）
+    const mainTables = ['passengers', 'drivers', 'admins'];
+    const childTables = ['orders', 'rental_posts', 'chat_messages', 'flood_reports'];
+    for (const t of [...childTables, ...mainTables]) {
+      try { db.prepare(`DELETE FROM ${t}`).run(); } catch { /* 表唔存在就跳過 */ }
+    }
+
+    // 3. 插入備份資料（先主表後子表）
+    let inserted = 0;
+    let skipped = 0;
+    for (const t of [...mainTables, ...childTables]) {
+      const rows = dump.tables[t];
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) {
+        const cols = Object.keys(row);
+        if (cols.length === 0) continue;
+        const placeholders = cols.map(() => '?').join(',');
+        const values = cols.map((c) => row[c]);
+        try {
+          db.prepare(`INSERT INTO ${t} (${cols.map((c) => '"' + c + '"').join(',')}) VALUES (${placeholders})`).run(...values);
+          inserted += 1;
+        } catch { skipped += 1; }
+      }
+    }
+
+    res.json({ ok: true, restoredTables: RESTORE_TABLES, inserted, skipped, autoBackupPath: beforePath });
+  } catch (e) {
+    res.status(500).json({ error: '還原失敗: ' + (e.message || '') });
   }
 });
 
