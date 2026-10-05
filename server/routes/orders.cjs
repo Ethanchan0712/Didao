@@ -567,7 +567,7 @@ router.get('/driver/earnings', authDriver, (req, res) => {
     FROM orders o
     LEFT JOIN passengers p ON o.passenger_id = p.id
     LEFT JOIN drivers d ON o.driver_id = d.id
-    WHERE o.driver_id = ? AND o.status IN ('paid','finished')
+    WHERE o.driver_id = ? AND o.status IN ('paid','finished','completed')
     ORDER BY o.created_at DESC
     LIMIT 30
   `).all(req.userId);
