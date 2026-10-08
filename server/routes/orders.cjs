@@ -813,35 +813,38 @@ router.get('/stream/driver', authDriver, (req, res) => {
 });
 
 // ========== 自動清理「幽靈單」 ==========
-// accepted/picked_up 單如果個司機 90 分鐘無心跳（關咗 app／斷線／冇載客），自動取消並釋放司機，
+// 司機 90 分鐘無心跳（關咗 app／斷線／冇載客）嘅單，自動收尾並釋放司機：
+//  - accepted/picked_up → cancelled（未載客，放棄）
+//  - paid → completed（已載客，平台唔收費，自動完成）
 // 防止幽靈單一直卡住，令司機下次登入自動跳去載客／完成頁（「不停閃退」根因之一）
 function cleanupStaleOrders() {
   const staleBefore = Date.now() - 90 * 60 * 1000; // 90 分鐘
   let rows = [];
   try {
     rows = db.prepare(`
-      SELECT o.id, o.driver_id FROM orders o
+      SELECT o.id, o.driver_id, o.status FROM orders o
       JOIN drivers d ON o.driver_id = d.id
-      WHERE o.status IN ('accepted','picked_up')
+      WHERE o.status IN ('accepted','picked_up','paid')
         AND (d.last_seen IS NULL OR d.last_seen < ?)
     `).all(staleBefore);
   } catch { return; }
   if (!rows.length) return;
-  const cancel = db.prepare("UPDATE orders SET status = 'cancelled', finished_at = ? WHERE id = ?");
+  const setDone = db.prepare("UPDATE orders SET status = ?, finished_at = ? WHERE id = ?");
   const offline = db.prepare("UPDATE drivers SET online = 0 WHERE id = ?");
   for (const row of rows) {
     try {
-      cancel.run(Date.now(), row.id);
+      const to = row.status === 'paid' ? 'completed' : 'cancelled';
+      setDone.run(to, Date.now(), row.id);
       if (row.driver_id) offline.run(row.driver_id);
       try { sseHub.publishToOrder(row.id, 'order-cancelled', { orderId: row.id }); } catch {}
       try { sseHub.publishToDriverHall('order-cancelled', { orderId: row.id }); } catch {}
-      console.log('[cleanup] 幽靈單自動取消:', row.id, 'driver=', row.driver_id);
+      console.log('[cleanup] 幽靈單自動收尾:', row.id, row.status, '→', to, 'driver=', row.driver_id);
     } catch (e) {
-      console.warn('[cleanup] 取消幽靈單失敗', row.id, e.message);
+      console.warn('[cleanup] 收尾幽靈單失敗', row.id, e.message);
     }
   }
 }
 setInterval(cleanupStaleOrders, 60 * 1000); // 每分鐘檢查一次
-console.log('[cleanup] 幽靈單自動清理已啟動（90 分鐘無心跳自動釋放）');
+console.log('[cleanup] 幽靈單自動清理已啟動（90 分鐘無心跳自動收尾）');
 
 module.exports = router;
