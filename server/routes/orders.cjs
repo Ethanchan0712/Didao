@@ -394,6 +394,10 @@ router.get('/driver/hall', authDriver, (req, res) => {
 
   // 按派單階段 + 司機等級過濾
   const now = Date.now();
+  // 一次過攞呢位司機拒絕過嘅單（避免每張單逐次查 DB，大量單時大幅加快）
+  const myRejections = new Set(
+    db.prepare('SELECT order_id FROM order_rejections WHERE driver_id = ?').all(req.userId).map(r => r.order_id)
+  );
   const filtered = rows.filter(row => {
     const phase = row.dispatch_phase || 0;
 
@@ -401,9 +405,7 @@ router.get('/driver/hall', authDriver, (req, res) => {
     if (row.created_by_driver) return true;
 
     // 拒單記錄：呢位司機拒過嘅單唔會再派俾佢
-    const rejected = db.prepare('SELECT 1 FROM order_rejections WHERE order_id = ? AND driver_id = ?')
-      .get(row.id, req.userId);
-    if (rejected) return false;
+    if (myRejections.has(row.id)) return false;
 
     // VVIP 司機：所有階段嘅單都睇到
     if (isVvip) return true;
@@ -453,10 +455,15 @@ router.post('/driver/accept/:orderId', authDriver, (req, res) => {
   const driverLat = driver.current_lat || order.pickup_lat + 0.01;
   const driverLng = driver.current_lng || order.pickup_lng + 0.01;
 
-  db.prepare(`UPDATE orders SET
+  const info = db.prepare(`UPDATE orders SET
     status = 'accepted', driver_id = ?, accepted_at = ?,
     driver_lat = ?, driver_lng = ?
     WHERE id = ? AND status = 'searching'`).run(req.userId, now, driverLat, driverLng, orderId);
+
+  // 並發安全：如果 UPDATE 影響 0 行（單已經俾人搶咗／取消咗），唔好當成接單成功
+  if (info.changes === 0) {
+    return res.status(400).json({ error: '訂單已經俾人接咗或者取消咗' });
+  }
 
   const updated = getOrderById(orderId);
 

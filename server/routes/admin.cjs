@@ -272,6 +272,25 @@ router.get('/orders', authAdmin, (req, res) => {
   res.json({ orders: rows });
 });
 
+// ========== 管理員刪單（清理測試單／問題單） ==========
+router.delete('/orders/:id', authAdmin, (req, res) => {
+  const info = db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
+  if (info.changes === 0) return res.status(404).json({ error: '訂單唔存在' });
+  res.json({ ok: true });
+});
+
+// ========== 管理員清測試單（淨係清未接嘅 searching 單，按乘客電話前綴） ==========
+router.post('/orders/cleanup-test', authAdmin, (req, res) => {
+  // 清 9777 開頭（測試帳戶）乘客嘅 searching 單，以及超過 2 小時仲未接嘅 searching 單
+  const now = Date.now();
+  const cutoff = now - 2 * 60 * 60 * 1000;
+  const info = db.prepare(`DELETE FROM orders
+    WHERE status = 'searching' AND (passenger_id IN (
+      SELECT id FROM passengers WHERE phone LIKE '9777%'
+    ) OR created_at < ?)`).run(cutoff);
+  res.json({ ok: true, deleted: info.changes });
+});
+
 // ========== SSE 管理員 ==========
 // ========== 介紹人統計（管理員專用） ==========
 // 會員號碼=電話號碼。統計每部已開通司機有幾多人填佢做介紹人
