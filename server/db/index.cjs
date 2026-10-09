@@ -287,11 +287,20 @@ CREATE TABLE IF NOT EXISTS rental_car_requests (
   taxi_color TEXT,
   taxi_type TEXT,
   duration INTEGER,
+  contact TEXT,
   expires_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_req_created ON rental_car_requests(created_at);
 `);
+// 舊 DB migration：補返 contact 欄位（如果表已存在但冇）
+try {
+  const reqCols = db.prepare('PRAGMA table_info(rental_car_requests)').all().map((c) => c.name);
+  if (!reqCols.includes('contact')) {
+    db.prepare('ALTER TABLE rental_car_requests ADD COLUMN contact TEXT').run();
+    console.log('[DB] rental_car_requests 加咗 contact 欄位');
+  }
+} catch (e) { /* ignore */ }
 console.log('[DB] rental_car_requests table ready');
 
 // ========== Seed admin + 營運主任 ==========

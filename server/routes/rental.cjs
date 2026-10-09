@@ -145,8 +145,8 @@ router.post('/find', (req, res) => {
     const expiresAt = Date.now() + dur * 24 * 60 * 60 * 1000;
     db.prepare(`
       INSERT INTO rental_car_requests
-      (id, owner_key, pickup_area, time_from, time_to, dates, taxi_color, taxi_type, duration, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, owner_key, pickup_area, time_from, time_to, dates, taxi_color, taxi_type, duration, contact, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       ownerKey,
@@ -157,6 +157,7 @@ router.post('/find', (req, res) => {
       String(b.taxiColor || 'all'),
       String(b.taxiType || 'all'),
       dur,
+      String(b.contact || '').slice(0, 80),
       expiresAt,
       Date.now()
     );
