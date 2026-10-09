@@ -252,12 +252,26 @@ CREATE TABLE IF NOT EXISTS rental_posts (
   rating REAL DEFAULT 5,
   rental_count INTEGER DEFAULT 0,
   owner_key TEXT,                -- 發佈人識別（手機/帳號），用嚟判斷「係咪我發佈」
+  duration INTEGER,              -- 發佈有效日數（7/14/30/90），NULL=永久
+  expires_at INTEGER,            -- 過期時間戳（created_at + duration 天數）
   created_at INTEGER NOT NULL,
   updated_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_rental_district ON rental_posts(district);
 CREATE INDEX IF NOT EXISTS idx_rental_created ON rental_posts(created_at);
 `);
+// migration：舊 DB 冇 duration/expires_at → 補欄位
+try {
+  const rpCols = db.prepare('PRAGMA table_info(rental_posts)').all().map((c) => c.name);
+  if (!rpCols.includes('duration')) {
+    db.prepare('ALTER TABLE rental_posts ADD COLUMN duration INTEGER').run();
+    console.log('[DB] rental_posts +duration');
+  }
+  if (!rpCols.includes('expires_at')) {
+    db.prepare('ALTER TABLE rental_posts ADD COLUMN expires_at INTEGER').run();
+    console.log('[DB] rental_posts +expires_at');
+  }
+} catch (e) { console.warn('[DB] rental_posts migration skip:', e.message); }
 console.log('[DB] rental_posts table ready');
 
 // ========== Seed admin + 營運主任 ==========

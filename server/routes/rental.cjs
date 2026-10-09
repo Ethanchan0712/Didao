@@ -23,6 +23,9 @@ router.get('/', (req, res) => {
       where.push(`(owner_name LIKE ? OR plate LIKE ? OR note LIKE ?)`);
       params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
+    // 過期單自動下架（duration 屆滿就唔顯示）
+    where.push(`(expires_at IS NULL OR expires_at > ?)`);
+    params.push(Date.now());
     if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
     sql += ` ORDER BY created_at DESC LIMIT 100`;
     const rows = db.prepare(sql).all(...params);
@@ -51,11 +54,14 @@ router.post('/', (req, res) => {
     const b = req.body || {};
     const id = 'rt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const ownerKey = String(b.ownerKey || '').slice(0, 50);
+    const dur = Number(b.duration) > 0 ? Math.round(Number(b.duration)) : null;
+    const expiresAt = dur ? Date.now() + dur * 24 * 60 * 60 * 1000 : null;
     db.prepare(`
       INSERT INTO rental_posts
       (id, taxi_color, car_model, shift, district, price, price_unit, plate,
-       owner_name, owner_phone, year, seats, note, rating, rental_count, owner_key, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       owner_name, owner_phone, year, seats, note, rating, rental_count, owner_key,
+       duration, expires_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(b.taxiColor || 'red'),
@@ -73,6 +79,8 @@ router.post('/', (req, res) => {
       5.0,
       0,
       ownerKey,
+      dur,
+      expiresAt,
       Date.now(),
       Date.now()
     );
