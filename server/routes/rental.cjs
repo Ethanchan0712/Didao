@@ -107,4 +107,80 @@ router.delete('/:id', (req, res) => {
   }
 });
 
+// ========== 人搵車（乘客發佈搭車需求） ==========
+// 公開列表（過期自動隱藏）
+router.get('/find', (req, res) => {
+  try {
+    const { taxiColor, taxiType } = req.query;
+    let sql = `SELECT * FROM rental_car_requests`;
+    const where = [];
+    const params = [];
+    if (taxiColor && taxiColor !== 'all') {
+      where.push(`taxi_color = ?`);
+      params.push(taxiColor);
+    }
+    if (taxiType && taxiType !== 'all') {
+      where.push(`taxi_type = ?`);
+      params.push(taxiType);
+    }
+    // 過期單自動下架
+    where.push(`(expires_at IS NULL OR expires_at > ?)`);
+    params.push(Date.now());
+    if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
+    sql += ` ORDER BY created_at DESC LIMIT 100`;
+    const rows = db.prepare(sql).all(...params);
+    res.json({ posts: rows });
+  } catch (e) {
+    res.status(500).json({ error: '讀取人搵車失敗' });
+  }
+});
+
+// 發佈人搵車
+router.post('/find', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = 'fr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const ownerKey = String(b.ownerKey || '').slice(0, 50);
+    const dur = Number(b.duration) > 0 ? Math.round(Number(b.duration)) : 30;
+    const expiresAt = Date.now() + dur * 24 * 60 * 60 * 1000;
+    db.prepare(`
+      INSERT INTO rental_car_requests
+      (id, owner_key, pickup_area, time_from, time_to, dates, taxi_color, taxi_type, duration, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      ownerKey,
+      String(b.pickupArea || '').slice(0, 60),
+      String(b.timeFrom || '').slice(0, 20),
+      String(b.timeTo || '').slice(0, 20),
+      String(b.dates || '').slice(0, 100),
+      String(b.taxiColor || 'all'),
+      String(b.taxiType || 'all'),
+      dur,
+      expiresAt,
+      Date.now()
+    );
+    res.json({ ok: true, id });
+  } catch (e) {
+    res.status(500).json({ error: '發佈失敗' });
+  }
+});
+
+// 刪除自己發佈嘅人搵車
+router.delete('/find/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const ownerKey = req.query.ownerKey || '';
+    const row = db.prepare('SELECT * FROM rental_car_requests WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: '單唔存在' });
+    if (ownerKey && row.owner_key && ownerKey !== row.owner_key) {
+      return res.status(403).json({ error: '冇權限刪除' });
+    }
+    db.prepare('DELETE FROM rental_car_requests WHERE id = ?').run(id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: '刪除失敗' });
+  }
+});
+
 module.exports = router;

@@ -274,6 +274,25 @@ try {
 } catch (e) { console.warn('[DB] rental_posts migration skip:', e.message); }
 console.log('[DB] rental_posts table ready');
 
+// ========== 人搵車（乘客發佈搭車需求，車主睇到可以聯絡） ==========
+db.exec(`
+CREATE TABLE IF NOT EXISTS rental_car_requests (
+  id TEXT PRIMARY KEY,
+  owner_key TEXT,
+  pickup_area TEXT,
+  time_from TEXT,
+  time_to TEXT,
+  dates TEXT,
+  taxi_color TEXT,
+  taxi_type TEXT,
+  duration INTEGER,
+  expires_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_req_created ON rental_car_requests(created_at);
+`);
+console.log('[DB] rental_car_requests table ready');
+
 // ========== Seed admin + 營運主任 ==========
 (function migrateAdminRole() {
   const cols = db.prepare('PRAGMA table_info(admins)').all().map(c => c.name);
