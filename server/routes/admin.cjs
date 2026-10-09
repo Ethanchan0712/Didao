@@ -272,6 +272,33 @@ router.get('/orders', authAdmin, (req, res) => {
   res.json({ orders: rows });
 });
 
+// ========== 每日訂單統計（管理員睇每日單量） ==========
+router.get('/orders/daily', authAdmin, (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT
+        date(created_at/1000 + 28800, 'unixepoch') AS day,
+        COUNT(*) AS total,
+        SUM(CASE WHEN status IN ('finished','completed','paid') THEN 1 ELSE 0 END) AS success,
+        SUM(CASE WHEN status IN ('cancelled') AND driver_id IS NULL THEN 1 ELSE 0 END) AS unmatched,
+        SUM(CASE WHEN status IN ('finished','completed','paid') THEN COALESCE(actual_fare, estimated_fare, 0) ELSE 0 END) AS fare_est
+      FROM orders
+      GROUP BY day
+      ORDER BY day DESC
+      LIMIT 60
+    `).all();
+    // 補今日（香港時區 +8）
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+    const hasToday = rows.some(r => r.day === today);
+    if (!hasToday) {
+      rows.unshift({ day: today, total: 0, success: 0, unmatched: 0, fare_est: 0 });
+    }
+    res.json({ daily: rows });
+  } catch (e) {
+    res.status(500).json({ error: '讀取每日統計失敗' });
+  }
+});
+
 // ========== 管理員刪單（清理測試單／問題單） ==========
 router.delete('/orders/:id', authAdmin, (req, res) => {
   const info = db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
