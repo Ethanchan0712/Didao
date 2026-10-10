@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/index.cjs');
 const sseHub = require('../sse/hub.cjs');
-const { authPassenger, authDriver } = require('../middleware/auth.cjs');
+const { authPassenger, authDriver, authAdmin } = require('../middleware/auth.cjs');
 
 const router = express.Router();
 
@@ -853,5 +853,55 @@ function cleanupStaleOrders() {
 }
 setInterval(cleanupStaleOrders, 60 * 1000); // 每分鐘檢查一次
 console.log('[cleanup] 幽靈單自動清理已啟動（90 分鐘無心跳自動收尾）');
+
+// ========== 乘客投訴（存落 server，管理員後台睇到） ==========
+router.post('/passenger/complaint', authPassenger, (req, res) => {
+  const { orderId, type, description } = req.body;
+  if (!orderId) return res.status(400).json({ error: '缺少訂單編號' });
+  const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!row) return res.status(404).json({ error: '訂單唔存在' });
+  if (row.passenger_id !== req.userId) return res.status(403).json({ error: '唔可以投訴其他人嘅訂單' });
+  const complaint = JSON.stringify({ type: type || '其他', description: description || '', createdAt: Date.now(), status: 'pending' });
+  db.prepare('UPDATE orders SET complaint = ?, complaint_reply = NULL WHERE id = ?').run(complaint, orderId);
+  try { sseHub.publishToAdmin('complaint-new', { orderId, type: type || '其他' }); } catch { /* ignore */ }
+  res.json({ ok: true });
+});
+
+// ========== 管理員攞投訴列表 ==========
+router.get('/admin/complaints', authAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM orders WHERE complaint IS NOT NULL AND complaint != '' ORDER BY created_at DESC LIMIT 200").all();
+  const list = rows.map((o) => {
+    let c = null;
+    try { c = JSON.parse(o.complaint); } catch { c = null; }
+    return {
+      id: o.id,
+      status: o.status,
+      passenger_id: o.passenger_id,
+      driver_id: o.driver_id,
+      pickup_name: o.pickup_name,
+      destination_name: o.destination_name,
+      created_at: o.created_at,
+      estimated_fare: o.estimated_fare,
+      actual_fare: o.actual_fare,
+      complaint: c,
+      reply: o.complaint_reply || '',
+    };
+  });
+  res.json({ complaints: list });
+});
+
+// ========== 管理員處理投訴（標記已處理＋回覆） ==========
+router.post('/admin/complaint/resolve', authAdmin, (req, res) => {
+  const { orderId, reply } = req.body;
+  if (!orderId) return res.status(400).json({ error: '缺少訂單編號' });
+  const row = db.prepare('SELECT complaint FROM orders WHERE id = ?').get(orderId);
+  if (!row || !row.complaint) return res.status(404).json({ error: '投訴唔存在' });
+  let c;
+  try { c = JSON.parse(row.complaint); } catch { return res.status(500).json({ error: '投訴資料損毀' }); }
+  c.status = 'resolved';
+  c.reply = reply || '';
+  db.prepare('UPDATE orders SET complaint = ?, complaint_reply = ? WHERE id = ?').run(JSON.stringify(c), reply || '', orderId);
+  res.json({ ok: true });
+});
 
 module.exports = router;

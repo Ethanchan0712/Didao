@@ -158,6 +158,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_dispatch ON orders(dispatch_phase, status)
   add('teishoku', 'teishoku INTEGER DEFAULT 0');
   add('teishoku_price', 'teishoku_price REAL');
   add('is_direct', 'is_direct TEXT DEFAULT \'standard\'');
+  add('complaint', 'complaint TEXT');
+  add('complaint_reply', 'complaint_reply TEXT');
 })();
 
 // ========== 兼容舊數據庫：drivers 補 id_front4 ==========
