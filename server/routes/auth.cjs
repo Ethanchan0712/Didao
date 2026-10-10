@@ -271,6 +271,53 @@ router.post('/driver/vvip-apply', authDriver, (req, res) => {
   });
 });
 
+// ========== 司機更新個人資料（姓名／電話） ==========
+router.post('/driver/update-profile', authDriver, (req, res) => {
+  const { name, phone } = req.body;
+  const userId = req.user.id;
+  const row = db.prepare('SELECT * FROM drivers WHERE id = ?').get(userId);
+  if (!row) return res.status(404).json({ error: '司機唔存在' });
+
+  const updates = [];
+  const params = [];
+  if (typeof name === 'string' && name.trim()) {
+    updates.push('name = ?');
+    params.push(name.trim().slice(0, 50));
+  }
+  if (typeof phone === 'string' && phone.trim()) {
+    const p = phone.trim();
+    if (!/^\d{8}$/.test(p)) {
+      return res.status(400).json({ error: '電話號碼必須係 8 位數字' });
+    }
+    const dup = db.prepare('SELECT id FROM drivers WHERE phone = ? AND id != ?').get(p, userId);
+    if (dup) return res.status(400).json({ error: '呢個電話號碼已俾其他司機使用' });
+    updates.push('phone = ?');
+    params.push(p);
+  }
+  if (updates.length === 0) return res.status(400).json({ error: '冇資料要更新' });
+
+  params.push(userId);
+  db.prepare(`UPDATE drivers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  const updated = db.prepare('SELECT * FROM drivers WHERE id = ?').get(userId);
+  res.json({
+    ok: true,
+    user: {
+      id: updated.id,
+      username: updated.username,
+      name: updated.name,
+      phone: updated.phone,
+      plate: updated.plate,
+      status: updated.status,
+      is_vvip: !!updated.is_vvip,
+      vvip_expires_at: updated.vvip_expires_at,
+      is_vip: !!updated.is_vip,
+      vip_expires_at: updated.vip_expires_at,
+      online: !!updated.online,
+    },
+  });
+});
+
 // ========== 管理員登入 ==========
 router.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
