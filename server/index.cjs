@@ -25,6 +25,26 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
+// 私隱政策頁（Google Play / PCPD 要求；獨立於 SPA 之外，直接 serve）
+app.get('/privacy', (req, res) => {
+  const privacyPath = path.join(__dirname, 'privacy.html');
+  if (fs.existsSync(privacyPath)) {
+    res.sendFile(privacyPath);
+  } else {
+    res.status(200).send('本平台私隱政策暫未上線，請電郵 tkdw0712@gmail.com 查詢。');
+  }
+});
+
+// 網頁刪除帳戶申請頁（Google Play Account Deletion 要求：in-app + web link）
+app.get('/delete-account', (req, res) => {
+  const delPath = path.join(__dirname, 'delete-account.html');
+  if (fs.existsSync(delPath)) {
+    res.sendFile(delPath);
+  } else {
+    res.status(200).send('請喺 App 內「設定」→「刪除帳戶」，或電郵 tkdw0712@gmail.com 申請刪除帳戶。');
+  }
+});
+
 // Serve static client build in production
 const clientDist = path.join(__dirname, '..', 'dist');
 const fs = require('fs');

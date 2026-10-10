@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>刪除帳戶申請 · 的道（DikDou）香港的士叫車平台</title>
+<meta name="robots" content="index, follow">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang HK","Microsoft JhengHei",Roboto,sans-serif;background:#f7f9fc;color:#1a2233;line-height:1.7}
+  .wrap{max-width:600px;margin:0 auto;padding:24px 18px 70px}
+  header{border-bottom:2px solid #e11d48;padding-bottom:18px;margin-bottom:24px}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-size:20px;font-weight:800;color:#e11d48}
+  .brand .dot{width:14px;height:14px;border-radius:4px;background:#e11d48;display:inline-block}
+  header p{color:#5b6b80;margin-top:6px;font-size:14px}
+  .card{background:#fff;border:1px solid #e4e9f0;border-radius:14px;padding:20px 22px;margin:14px 0;box-shadow:0 1px 3px rgba(16,24,40,.04)}
+  h1{font-size:22px;margin:8px 0 6px}
+  p{font-size:15px;margin:8px 0}
+  ul{margin:8px 0 8px 20px}
+  li{margin:5px 0;font-size:15px}
+  label{font-weight:700;font-size:14px;display:block;margin:14px 0 6px}
+  input[type=text],input[type=email],select{width:100%;height:44px;border:1.5px solid #dbe0e8;border-radius:10px;padding:0 12px;font-size:15px;background:#fff}
+  input:focus,select:focus{outline:none;border-color:#e11d48}
+  button{width:100%;height:48px;margin-top:18px;border:none;border-radius:12px;background:#e11d48;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+  button:hover{background:#c11237}
+  .note{background:#fdecef;border:1px solid #f6c6cd;border-radius:10px;padding:12px 14px;font-size:13.5px;color:#8a1f35;margin:14px 0}
+  .ok{color:#0f766e;font-weight:700}
+  .foot{margin-top:26px;font-size:13px;color:#94a3b8;border-top:1px solid #e4e9f0;padding-top:14px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="dot"></span>的道 DikDou</div>
+    <h1>刪除帳戶申請</h1>
+    <p>香港的士叫車平台 · 根據《個人資料（私隱）條例》你有權刪除帳戶及個人資料</p>
+  </header>
+
+  <div class="card">
+    <p><strong>刪除帳戶代表：</strong></p>
+    <ul>
+      <li>永久刪除你嘅帳戶同相關個人資料（訂單、叫車紀錄、發佈紀錄等）；</li>
+      <li>呢個動作<strong>不可逆</strong>，刪除後唔可以恢復，需要重新註冊；</li>
+      <li>刪除申請會喺<strong>30 日內</strong>處理完成。</li>
+    </ul>
+    <div class="note">如你係喺 App 內登入緊，建議直接喺 App「設定」→「刪除帳戶」操作，最快捷。</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:16px">填寫刪除申請（會電郵通知我哋）</h2>
+    <form onsubmit="composeMail(event)">
+      <label for="phone">電話號碼 *</label>
+      <input type="text" id="phone" placeholder="例如 91234567" required>
+      <label for="role">你係邊類使用者？</label>
+      <select id="role">
+        <option value="乘客">乘客</option>
+        <option value="司機">司機</option>
+        <option value="租車／車主">租車／車主</option>
+        <option value="其他">其他</option>
+      </select>
+      <label for="reason">刪除原因（可選）</label>
+      <input type="text" id="reason" placeholder="唔需要說明，可以留空">
+      <button type="submit">提交刪除申請（開啟電郵）</button>
+    </form>
+    <p id="hint" class="hidden ok" style="margin-top:12px;font-size:13.5px">電郵已開啟。如冇彈出，可手動寄至 tkdw0712@gmail.com，標題「刪除帳戶申請」。</p>
+  </div>
+
+  <div class="card">
+    <p><strong>其他刪除途徑：</strong></p>
+    <ul>
+      <li><b>App 內</b>：「設定」→「刪除帳戶」</li>
+      <li><b>電郵</b>：<a href="mailto:tkdw0712@gmail.com?subject=%E5%88%AA%E9%99%A4%E5%B8%B3%E6%88%B6%E7%94%B3%E8%AB%8B" style="color:#e11d48">tkdw0712@gmail.com</a>（標題註明「刪除帳戶」）</li>
+    </ul>
+    <p style="font-size:13.5px;color:#5b6b80">我哋收到申請後會核實身份，並喺 30 日內完成刪除。如有查詢可致電或電郵我哋。</p>
+  </div>
+
+  <p class="foot">© 2026 的道 DikDou · 本平台為民間叫車平台，不屬香港政府或任何官方機構 · <a href="https://didaohk.com/privacy" style="color:#5b6b80">私隱政策</a></p>
+</div>
+<script>
+  function composeMail(e){
+    e.preventDefault();
+    var phone=document.getElementById('phone').value.trim();
+    var role=document.getElementById('role').value;
+    var reason=document.getElementById('reason').value.trim();
+    var subject=encodeURIComponent('刪除帳戶申請 - '+phone);
+    var body=encodeURIComponent('刪除帳戶申請\n\n電話號碼：'+phone+'\n使用者類型：'+role+(reason?'\n原因：'+reason:'')+'\n\n請刪除以上帳戶及相關個人資料。');
+    window.location.href='mailto:tkdw0712@gmail.com?subject='+subject+'&body='+body;
+    document.getElementById('hint').classList.remove('hidden');
+  }
+</script>
+</body>
+</html>

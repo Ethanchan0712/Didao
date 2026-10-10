@@ -295,4 +295,39 @@ router.post('/admin/login', (req, res) => {
   res.json({ user, token });
 });
 
+// ===== 帳號刪除（Google Play 要求：用戶可刪除帳戶及相關資料）=====
+// 乘客刪帳：刪除帳戶＋佢嘅訂單
+router.post('/passenger/delete-account', authPassenger, (req, res) => {
+  const id = req.user.id;
+  try {
+    const del = db.transaction(() => {
+      db.prepare('DELETE FROM orders WHERE passenger_id = ?').run(id);
+      return db.prepare('DELETE FROM passengers WHERE id = ?').run(id).changes;
+    });
+    const n = del();
+    res.json({ ok: true, deleted: n });
+  } catch (e) {
+    res.status(500).json({ error: '刪除失敗，請稍後再試' });
+  }
+});
+
+// 司機刪帳：刪除帳戶＋訂單＋對應營運主任權限
+router.post('/driver/delete-account', authDriver, (req, res) => {
+  const id = req.user.id;
+  try {
+    const del = db.transaction(() => {
+      const d = db.prepare('SELECT phone FROM drivers WHERE id = ?').get(id);
+      if (d && d.phone) {
+        db.prepare('DELETE FROM admins WHERE username = ? AND role = \'operator\'').run(d.phone);
+      }
+      db.prepare('DELETE FROM orders WHERE driver_id = ?').run(id);
+      return db.prepare('DELETE FROM drivers WHERE id = ?').run(id).changes;
+    });
+    const n = del();
+    res.json({ ok: true, deleted: n });
+  } catch (e) {
+    res.status(500).json({ error: '刪除失敗，請稍後再試' });
+  }
+});
+
 module.exports = router;

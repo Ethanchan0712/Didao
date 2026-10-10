@@ -1,15 +1,26 @@
 // ========== 租車市場 API（出租單俾所有人睇到） ==========
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const db = require('../db/index.cjs');
 const router = express.Router();
 
-function hashPwd(p) { return crypto.createHash('sha256').update(String(p || '')).digest('hex'); }
+// 管理密碼雜湊：用 bcrypt（自動加 salt）。舊格式（無 salt sha256）仍可驗證兼容舊 post。
+function hashPwd(p) { return bcrypt.hashSync(String(p || ''), 10); }
+function verifyPwd(rowHash, pwd) {
+  if (!rowHash || !pwd) return false;
+  if (rowHash.startsWith('$2')) {
+    try { return bcrypt.compareSync(String(pwd), rowHash); } catch { return false; }
+  }
+  // 舊格式 fallback（無 salt sha256）
+  const legacy = crypto.createHash('sha256').update(String(pwd)).digest('hex');
+  return legacy === rowHash;
+}
 // 管理權驗證：有設密碼 → 必須密碼啱；冇密碼 → 先接受 ownerKey
 function canManage(row, pwd, ownerKey) {
   if (!row) return false;
   if (row.manage_pwd) {
-    return pwd ? row.manage_pwd === hashPwd(pwd) : false;
+    return verifyPwd(row.manage_pwd, pwd);
   }
   if (row.owner_key && ownerKey) return row.owner_key === ownerKey;
   return false;
