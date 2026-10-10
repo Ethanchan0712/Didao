@@ -42,6 +42,10 @@ function authDriver(req, res, next) {
     if (decoded.role !== 'driver') throw new Error('wrong role');
     const user = db.prepare('SELECT id, username, phone, name, avatar, plate, car_model, driver_license, id_front4, status, online, rating, rating_count, current_lat, current_lng, is_vvip, vvip_applied, vvip_requested_at FROM drivers WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: '帳號不存在' });
+    // 統一 boolean 型別（login endpoint 用 !! 轉 boolean，呢度原封唔動會回 0/1 number，兩邊唔一致）
+    user.online = !!user.online;
+    user.is_vvip = !!user.is_vvip;
+    user.vvip_applied = !!user.vvip_applied;
     req.user = user;
     req.userId = user.id;
     next();

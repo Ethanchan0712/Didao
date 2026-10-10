@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 3001;
 app.use((req, res, next) => { console.log('[REQ]', new Date().toISOString().slice(11,19), req.method, req.originalUrl); next(); });
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+// 統一補 body：無 JSON body 嘅 POST（無 Content-Type / 空 body）都會令 req.body 係 undefined，
+// 任何 handler destructure req.body 即爆 TypeError→500。呢度補返空物件，杜絕成類 500。
+app.use((req, res, next) => { req.body = req.body || {}; next(); });
 
 // DB init (side effect - creates tables + seeds)
 require('./db/index.cjs');
@@ -64,6 +67,10 @@ if (fs.existsSync(clientDist)) {
 app.use((err, req, res, next) => {
   console.error('[ERR]', new Date().toISOString(), req.method, req.originalUrl, err.message);
   if (res.headersSent) return next(err);
+  // 壞 JSON body：係 client 錯，回 400 而唔係 500
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: '請求格式唔正確（JSON 解析失敗）' });
+  }
   res.status(500).json({ error: '伺服器內部錯誤，請稍後再試' });
 });
 

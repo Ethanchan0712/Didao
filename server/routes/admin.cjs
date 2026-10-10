@@ -69,7 +69,11 @@ router.get('/drivers', authOperator, (req, res) => {
   );
 
   res.json({
-    drivers: rows.map((r) => ({ ...toCamel(r), isOperator: isOperator ? false : opSet.has(r.phone) })),
+    drivers: rows.map((r) => {
+      // 安全：唔好將 bcrypt password hash 洩漏俾管理員後台前端
+      const { password, ...rest } = r;
+      return { ...toCamel(rest), isOperator: isOperator ? false : opSet.has(r.phone) };
+    }),
     total, page: p, pageSize: ps, isOperator,
   });
 });
@@ -256,7 +260,7 @@ router.get('/orders', authAdmin, (req, res) => {
   const { status } = req.query;
   let query = `
     SELECT o.*,
-           p.name as passenger_name, p.phone as passenger_phone,
+           p.name as passenger_name, COALESCE(o.passenger_phone, p.phone) as passenger_phone,
            d.name as driver_name, d.plate as driver_plate
     FROM orders o
     LEFT JOIN passengers p ON o.passenger_id = p.id
@@ -280,7 +284,7 @@ router.get('/orders/daily', authAdmin, (req, res) => {
         date(created_at/1000 + 28800, 'unixepoch') AS day,
         COUNT(*) AS total,
         SUM(CASE WHEN status IN ('finished','completed','paid') THEN 1 ELSE 0 END) AS success,
-        SUM(CASE WHEN status IN ('cancelled') AND driver_id IS NULL THEN 1 ELSE 0 END) AS unmatched,
+        SUM(CASE WHEN status IN ('searching','cancelled') AND accepted_at IS NULL THEN 1 ELSE 0 END) AS unmatched,
         SUM(CASE WHEN status IN ('finished','completed','paid') THEN COALESCE(actual_fare, estimated_fare, 0) ELSE 0 END) AS fare_est
       FROM orders
       GROUP BY day
