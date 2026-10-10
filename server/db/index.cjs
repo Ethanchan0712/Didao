@@ -272,6 +272,10 @@ try {
     db.prepare('ALTER TABLE rental_posts ADD COLUMN expires_at INTEGER').run();
     console.log('[DB] rental_posts +expires_at');
   }
+  if (!rpCols.includes('manage_pwd')) {
+    db.prepare('ALTER TABLE rental_posts ADD COLUMN manage_pwd TEXT').run();
+    console.log('[DB] rental_posts +manage_pwd');
+  }
 } catch (e) { console.warn('[DB] rental_posts migration skip:', e.message); }
 console.log('[DB] rental_posts table ready');
 
@@ -299,6 +303,10 @@ try {
   if (!reqCols.includes('contact')) {
     db.prepare('ALTER TABLE rental_car_requests ADD COLUMN contact TEXT').run();
     console.log('[DB] rental_car_requests 加咗 contact 欄位');
+  }
+  if (!reqCols.includes('manage_pwd')) {
+    db.prepare('ALTER TABLE rental_car_requests ADD COLUMN manage_pwd TEXT').run();
+    console.log('[DB] rental_car_requests +manage_pwd');
   }
 } catch (e) { /* ignore */ }
 console.log('[DB] rental_car_requests table ready');

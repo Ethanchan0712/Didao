@@ -1,7 +1,19 @@
 // ========== 租車市場 API（出租單俾所有人睇到） ==========
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db/index.cjs');
 const router = express.Router();
+
+function hashPwd(p) { return crypto.createHash('sha256').update(String(p || '')).digest('hex'); }
+// 管理權驗證：有設密碼 → 必須密碼啱；冇密碼 → 先接受 ownerKey
+function canManage(row, pwd, ownerKey) {
+  if (!row) return false;
+  if (row.manage_pwd) {
+    return pwd ? row.manage_pwd === hashPwd(pwd) : false;
+  }
+  if (row.owner_key && ownerKey) return row.owner_key === ownerKey;
+  return false;
+}
 
 // 識別發佈人：用前端傳嚟嘅 ownerKey（手機號碼），冇登入都得
 // 全部出租單公開列表
@@ -54,14 +66,15 @@ router.post('/', (req, res) => {
     const b = req.body || {};
     const id = 'rt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const ownerKey = String(b.ownerKey || '').slice(0, 50);
+    const managePwd = b.managePwd ? hashPwd(b.managePwd) : null;
     const dur = Number(b.duration) > 0 ? Math.round(Number(b.duration)) : null;
     const expiresAt = dur ? Date.now() + dur * 24 * 60 * 60 * 1000 : null;
     db.prepare(`
       INSERT INTO rental_posts
       (id, taxi_color, car_model, shift, district, price, price_unit, plate,
        owner_name, owner_phone, year, seats, note, rating, rental_count, owner_key,
-       duration, expires_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       duration, expires_at, manage_pwd, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(b.taxiColor || 'red'),
@@ -81,6 +94,7 @@ router.post('/', (req, res) => {
       ownerKey,
       dur,
       expiresAt,
+      managePwd,
       Date.now(),
       Date.now()
     );
@@ -90,20 +104,56 @@ router.post('/', (req, res) => {
   }
 });
 
-// 刪除自己發佈嘅單（需 ownerKey 吻合）
+// 刪除自己發佈嘅單（需管理密碼或 ownerKey 吻合）
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const ownerKey = req.query.ownerKey || '';
     const row = db.prepare('SELECT * FROM rental_posts WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ error: '單唔存在' });
-    if (ownerKey && row.owner_key && ownerKey !== row.owner_key) {
-      return res.status(403).json({ error: '冇權限刪除' });
+    if (!canManage(row, req.query.pwd || '', req.query.ownerKey || '')) {
+      return res.status(403).json({ error: '請輸入正確嘅管理密碼' });
     }
     db.prepare('DELETE FROM rental_posts WHERE id = ?').run(id);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: '刪除失敗' });
+  }
+});
+
+// 編輯自己發佈嘅出租單（需管理密碼）
+router.put('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const b = req.body || {};
+    const row = db.prepare('SELECT * FROM rental_posts WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: '單唔存在' });
+    if (!canManage(row, b.pwd || '', b.ownerKey || '')) {
+      return res.status(403).json({ error: '請輸入正確嘅管理密碼' });
+    }
+    db.prepare(`
+      UPDATE rental_posts SET
+        taxi_color=?, car_model=?, shift=?, district=?, price=?, price_unit=?,
+        plate=?, owner_name=?, owner_phone=?, year=?, seats=?, note=?, updated_at=?
+      WHERE id=?
+    `).run(
+      String(b.taxiColor || row.taxi_color),
+      String(b.carModel || row.car_model),
+      String(b.shift || row.shift),
+      String(b.district || row.district),
+      b.price !== undefined ? Number(b.price) : row.price,
+      String(b.priceUnit || row.price_unit),
+      String(b.plate ?? row.plate ?? ''),
+      String(b.ownerName ?? row.owner_name ?? ''),
+      String(b.ownerPhone ?? row.owner_phone ?? ''),
+      b.year !== undefined ? Number(b.year) : row.year,
+      b.seats !== undefined ? Number(b.seats) : row.seats,
+      String(b.note ?? row.note ?? ''),
+      Date.now(),
+      id
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: '更新失敗' });
   }
 });
 
@@ -141,12 +191,13 @@ router.post('/find', (req, res) => {
     const b = req.body || {};
     const id = 'fr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const ownerKey = String(b.ownerKey || '').slice(0, 50);
+    const managePwd = b.managePwd ? hashPwd(b.managePwd) : null;
     const dur = Number(b.duration) > 0 ? Math.round(Number(b.duration)) : 30;
     const expiresAt = Date.now() + dur * 24 * 60 * 60 * 1000;
     db.prepare(`
       INSERT INTO rental_car_requests
-      (id, owner_key, pickup_area, time_from, time_to, dates, taxi_color, taxi_type, duration, contact, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, owner_key, pickup_area, time_from, time_to, dates, taxi_color, taxi_type, duration, contact, expires_at, manage_pwd, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       ownerKey,
@@ -159,6 +210,7 @@ router.post('/find', (req, res) => {
       dur,
       String(b.contact || '').slice(0, 80),
       expiresAt,
+      managePwd,
       Date.now()
     );
     res.json({ ok: true, id });
@@ -167,20 +219,49 @@ router.post('/find', (req, res) => {
   }
 });
 
-// 刪除自己發佈嘅人搵車
+// 刪除自己發佈嘅人搵車（需管理密碼或 ownerKey 吻合）
 router.delete('/find/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const ownerKey = req.query.ownerKey || '';
     const row = db.prepare('SELECT * FROM rental_car_requests WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ error: '單唔存在' });
-    if (ownerKey && row.owner_key && ownerKey !== row.owner_key) {
-      return res.status(403).json({ error: '冇權限刪除' });
+    if (!canManage(row, req.query.pwd || '', req.query.ownerKey || '')) {
+      return res.status(403).json({ error: '請輸入正確嘅管理密碼' });
     }
     db.prepare('DELETE FROM rental_car_requests WHERE id = ?').run(id);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: '刪除失敗' });
+  }
+});
+
+// 編輯自己發佈嘅人搵車（需管理密碼）
+router.put('/find/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const b = req.body || {};
+    const row = db.prepare('SELECT * FROM rental_car_requests WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: '單唔存在' });
+    if (!canManage(row, b.pwd || '', b.ownerKey || '')) {
+      return res.status(403).json({ error: '請輸入正確嘅管理密碼' });
+    }
+    db.prepare(`
+      UPDATE rental_car_requests SET
+        pickup_area=?, time_from=?, time_to=?, dates=?, taxi_color=?, taxi_type=?, contact=?
+      WHERE id=?
+    `).run(
+      String(b.pickupArea ?? row.pickup_area ?? ''),
+      String(b.timeFrom ?? row.time_from ?? ''),
+      String(b.timeTo ?? row.time_to ?? ''),
+      String(b.dates ?? row.dates ?? ''),
+      String(b.taxiColor ?? row.taxi_color ?? 'all'),
+      String(b.taxiType ?? row.taxi_type ?? 'all'),
+      String(b.contact ?? row.contact ?? ''),
+      id
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: '更新失敗' });
   }
 });
 
